@@ -1,0 +1,131 @@
+_parent_: options/base.yaml
+
+# --------------------------------------
+# tensorf config
+
+max_iter: 25000                                            # train to maximum number of iterations
+
+train_schedule:
+  n_voxel_init: 2097156 # 128**3
+  n_voxel_final: 125000000 # 500**3
+  upsample_iters: [2000,3000,4000,5000] # iterations for upsampling voxel grid
+  update_alphamask_iters: [2500] # iterations for updating alpha mask
+  alpha_mask_threshold: 0.0001 # threshold for updating creating alpha mask volume
+  shrink_bbox_with_alphamask: true # shrink bbox when first updating alphamask
+  resolution_scale_init: [1.0,1.0,1.0] # temporary scale the voxel resolution before first upsample ( to increase pose refinement robustness)
+
+arch:
+  shading:
+    model: MLP_Fea # can be "SH" or "MLP_PE" or "MLP_Fea" or "MLP" or "RGB"
+    view_pe: 2 # positional encoding used for MLP shading model
+    pose_pe: 2 # positional encoding used for MLP shading model
+    fea_pe: 2 # positional encoding used for MLP shading model
+    mlp_hidden_dim: 128 # hidden dimension of MLP shading model
+    detach_viewdirs: true
+    detach_xyz: true
+    app_dim: 27
+    predict_density: false # predict volume density feature with MLP (ignore seperate desity volume and use feature volume only)
+
+
+  feature_to_density_activation: relu # activation used to convert raw tensor density value to real density
+  plane_feature2density: false
+  density_shift: 0.0  # shift density=-10 in softplus; making density = 0  when feature == 0
+  distance_scale: 25.0 # scale up distance for sigma to alpha computation
+  tensorf:
+    model: TensorVMSplit # TensorVM Split or TensorCP
+    density_components: [16,4,4] # number of tensorf components for density
+    color_components: [48,12,12] # number of tensorf components for color
+    volume_init_scale: 0.1 # scaling factor for initializing density and feature volume indexes
+    volume_init_bias: 0.1 # the new initialization = gaussian * scale + bias
+    rayMarch_weight_thres: 0.0000001
+
+  # these are unused options
+  abs_components: false
+  ignore_negative_split: false
+  convolve_positive_only: false
+  convolve_plane_only: false
+  component_wise_feature2density: false
+
+loss_weight:                                                # loss weights (in log scale)
+    render: 1.0                                               # RGB rendering loss
+    render_fine:                                            # RGB rendering loss (for fine NeRF)
+    L1: # L1 sparsity loss
+      init: 1.e-5 # before first alpha mask update
+      rest: 1.e-5 # after first alpha mask update
+    Ortho: 0.0  # ???
+    TV_density:  1.0 # total variance loss for density components
+    TV_color: 1.0 # total variance loss for color components
+    render_albedo: # None
+    TV_depth: 0.0 # only if nerf.ray_sample_strategy == "all_view_rand_grid"
+    TV_depth_until_iters: 8000 # only if nerf.ray_sample_strategy == "all_view_rand_grid"
+
+optim:                                                      # optimization options
+    lr_index: 0.02                                              # learning rate (main)
+    lr_basis: 1.e-3                                           # terminal learning (only used with sched.type=ExponentialLR)
+    lr_decay_target_ratio: 0.1 # the target decay ratio; after decay_iters inital lr decays to lr*ratio
+    lr_decay_iters:  -1 #number of iterations the lr will decay to the target ratio; -1 will set it to n_iters
+    lr_upsample_reset: true
+    algo: Adam # optimizer
+    sched: None
+
+
+#---------------------------------------
+# nerf config
+
+
+nerf:                                                       # NeRF-specific options
+    view_dep: true                                          # condition MLP on viewpoint
+    depth:                                                  # depth-related options
+        param: metric                                      # depth parametrization (for sampling along the ray)
+        range: [0.01, 1.0]                                        # near/far bounds for depth sampling
+    sample_intvs: 300                                    # number of samples
+    sample_stratified: true                                 # stratified sampling
+    fine_sampling: false                                    # hierarchical sampling with another NeRF
+    sample_intvs_fine: # number of samples for the fine NeRF
+    ray_sampling_strategy: "all_view_rand_grid"             # there are 2 ways to sample pixels ( rays ) during training.
+    # it is impossible to render all images at onece, so we just ignore this case in the setting
+    # 1.  "all_view_rand_rays" sample random pixels in all view, each view contains same pixel positions.
+    # 2.  "single_view_rand_rays" sample random pixels in a single view, each iteration target one view one-by-one.
+    # 3.  "all_view_rand_grid" sample pixels in randomly shifted grid, wich increase stability accross random seed and enable calculation of TV loss on depth map
+    n_rays: 4096                                         # number of random rays for each step
+    density_noise_reg:                                      # Gaussian noise on density output as regularization
+    setbg_opaque: false                                          # fill transparent rendering with known background color (Blender only)
+    step_ratio: 0.5 # ratio between resolution and sampling_step_size
+                    # this ratio will compute and estimate sampling interval using current resolution,  overwrite nerf.sample_intvs if smaller
+
+
+
+data:                                                       # data options
+    dataset: llff                                           # dataset name
+    scene: fern                                             # scene name
+    image_size: [480,640]                                   # input image sizes [height,width]
+    num_workers: 4                                          # number of parallel workers for data loading
+    preload: true                                           # preload the entire dataset into the memory
+    val_ratio: 0.1                                          # ratio of sequence split for validation
+    scene_bbox: [-1.5, -1.67, -1.0, 1.5, 1.67, 1.0] #(llff)
+    # scene_bbox: [-1.5, -1.5, -1.5, 1.5, 1.5, 1.5] #(blender)
+
+camera:                                                     # camera options
+    model: perspective                                      # type of camera model
+    ndc: true                                              # reparametrize as normalized device coordinates (NDC)
+    noise: false
+    ndc_simulate_euclid_depth: False
+    ndc_simulate_euclid_sample: False
+
+
+batch_size:                                                 # batch size (not used for NeRF/BARF)
+      # in nerf batchsize ~= nerf.rand_rays, and is evenly spread across all poses
+max_epoch:                                                  # train to maximum number of epochs (not used for NeRF/BARF)
+
+
+trimesh:                                                    # options for marching cubes to extract 3D mesh
+    res: 128                                                # 3D sampling resolution
+    range: [-1.2,1.2]                                       # 3D range of interest (assuming same for x,y,z)
+    thres: 25.                                              # volume density threshold for marching cubes
+    chunk_size: 16384                                       # chunk size of dense samples to be evaluated at a time
+
+freq:                                                       # periodic actions during training
+    scalar: 500                                             # log losses and scalar states (every N iterations)
+    vis: 5000                                               # visualize results (every N iterations)
+    val: 5000                                               # validate on val set (every N iterations)
+    ckpt: 100000

@@ -1,0 +1,146 @@
+_parent_: options/tensorf_blender_VM.yaml
+# Edge guided loss mask ========================================
+
+edge_mask_on_render_loss: true
+alternate_edge_loss: true
+hard_edge_mask_mean_thresh: 1.25
+edge_mask_before_iter: 8000
+soft_edge_mask: false
+edge_loss_factor: 1.5
+non_edge_loss_factor: 0.5
+edge_mask_use_scale: 1.0
+
+
+# Near Plane Scale Issue =============================================
+tensorf_near_plane_schedule: [2.0,2.0]
+data:
+  scene_bbox: [-1.5, -1.5, -1.5, 1.5, 1.5, 1.5]
+
+ndc_simulate_euclid_depth: false
+ndc_simulate_euclid_sample: false
+
+# PE
+c2f_fea_pe_schedule: [1.0, 1.0, 1.0, 1.0, 1.0]
+c2f_view_pe_schedule: [1.0, 1.0, 1.0, 1.0, 1.0]
+
+# c2f 3D ===============================
+
+c2f_mode: uniform-gaussian
+c2f_schedule_density: [0.3, 0.15, 0.07, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+c2f_schedule_color: [0.3, 0.15, 0.07, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+c2f_kernel_size: 64
+
+c2f_random_density_blur: true
+c2f_random_density_scale_pool: [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+
+
+# c2f 2D ==================================
+blur_2d: true
+blur_2d_mode: uniform-gaussian
+blur_2d_c2f_schedule: [0.025, 0.0125, 0.00625, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+blur_2d_c2f_kernel_size: 201
+c2f_alternate_2D_blur: true
+c2f_alternate_2D_mode: sample
+c2f_alternate_2D_scale_pool: [0.0, 0.25, 0.5, 0.75, 1.0]
+
+
+train_pose_with_GT_scene: false
+GT_scene_ckpt: "lego_gt.ckpt" # only take effect if `take_pose_with_GT_scene` = false
+
+
+
+
+# view_sampling_n_groups: 1
+
+
+visualize_gradient: false
+vis_grad_n_rays: 72
+
+
+
+
+arch:
+  tensorf:
+    model: BAT_VMSplit
+    grid_sample_interp_mode: bilinear # bilinear
+  shading:
+    model: MLP_Fea
+    detach_viewdirs: true
+    detach_xyz: true
+
+
+
+# faster training for tuning
+max_iter: 40000
+train_schedule:
+  n_voxel_init: 262144 # 64**3
+
+  n_voxel_final: 64000000 # 400**3
+  upsample_iters: [2000,6000,7500,9000]
+  #upsample_iters: [5000,7500, 10000, 12500, 15000] # iterations for upsampling voxel grid
+  #upsample_iters: [6000, 7000, 8000] # iterations for upsampling voxel grid
+  update_alphamask_iters: [12000, 20000] # iterations for updating alpha mask
+  alpha_mask_threshold: 1.e-5 # threshold for updating creating alpha mask volume
+
+  shrink_bbox_with_alphamask: true # shrink bbox when first updating alphamask
+  #reset_pose_on_iter: 2500
+  reset_on_last_upsample:
+    density: false
+    appearance: false
+    basis: false
+  change_n_rays_after_n_iters: 6000
+  n_rays_init: 2048
+  n_rays_rest: 2048
+  change_AccumPoseGrad_after_n_iters: 20000
+  n_AccumPoseGrad_init: 1
+  n_AccumPoseGrad_rest: 1
+  #change_n_AccumGrad_after_n_iters: 20000
+  #n_AccumGrad_init: 1
+  #n_AccumGrad_rest: 1
+
+
+train_pose_with_GT_scene: false
+GT_scene_ckpt: "lego_gt.ckpt" # only take effect if `take_pose_with_GT_scene` = false
+
+
+camera:                                                     # camera options
+    noise: 0.15                                             # synthetic perturbations on the camera poses (Blender only)
+    visualize_depth: 0.5
+
+optim:                                                      # optimization options
+    lr_pose: 1.e-3                                          # learning rate of camera poses
+    lr_pose_end: 1.e-4                                      # terminal learning rate of camera poses (only used with sched_pose.type=ExponentialLR)
+    sched_pose:                                             # learning rate scheduling options
+        type: ExponentialLR # LambdaLR                                # scheduler (see PyTorch doc)
+        #lr_pose_schedule: [1.e-3,1.e-3,5.e-4, 1.e-5]
+        gamma:                                              # decay rate (can be empty if lr_pose_end were specified)
+    warmup_pose:                                            # linear warmup of the pose learning rate (N iterations)
+    test_photo: true                                        # test-time photometric optimization for evaluation
+    test_iter: 400                                          # number of iterations for test-time optimization
+    lr_pose_test: 1.e-4
+    lr_pose_test_end: 1.e-5
+    test_kernel_schedule: [0.0, 0.0]
+    lr_index: 1.e-2 #0.1x smaller than  original tensorf
+    lr_basis: 5.e-4 #0.1x smaller than original tensorf
+    #lr_blur_color: 3.e-3 # for c2f_mode = "diff" only (diff kernel paramter lr)
+    #lr_blur_density: 3.e-3 # for c2f_mode = "diff" only (diff kernel paramter lr)
+    algo: Adam
+    pose_algo: Adam
+    pose_grad_accum_iter: 1
+    grad_accum_iter: 1
+
+
+loss_weight:
+  L1:
+    init: 8e-5 # maybe we should turn off L1 loss before updating AlphaMask to prevent blur kernel from supressing all content.
+    rest: 4e-5
+  TV_density: 0.0
+  TV_color: 0.0
+freq:
+    vis_pose: 2000                                          # visualize pose
+    vis_train: 5000
+    vis: 200000 # no vis
+    val: 200000 # no vis
+    scalar: 500
+    ckpt: 100000 # no ckpt

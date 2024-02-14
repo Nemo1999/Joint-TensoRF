@@ -1,0 +1,102 @@
+** Introduction
+Official Code Release for *AAAI 2024* Paper : Improving Robustness for Joint Optimization of Camera Poses and Decomposed Low-Rank Tensorial Radiance Fields
+- [[https://alex04072000.github.io/Joint-TensoRF/][Project Page Link]]
+- Arxiv Link (TBD)
+- Paper Link (TBD)
+
+**** Robustify Joint Pose Optimization with Randomized 2D/3D Filtering and Edge-Guided Loss Mask
+
+#+DOWNLOADED: https://alex04072000.github.io/Joint-TensoRF/img/fig2_Version5.jpg @ 2024-02-14 00:22:38
+[[file:compare.jpg]]
+(a) Naively applying joint optimization on voxel-based NeRFs leads to dramatic failure as premature high-frequency signals in the voxel volume would curse the camera poses to stuck in local minima. (b) We propose a computationally effective manner to directly control the spectrum of the radiance field by performing separable component-wise convolution of Gaussian filters on the decomposed tensor. The proposed training scheme allows the joint optimization to converge successfully to a better solution.
+
+**** Efficient Separable Component-Wise Convolution
+#+DOWNLOADED: https://alex04072000.github.io/Joint-TensoRF/img/Teaser_Version2.jpg @ 2024-02-13 19:27:24
+file:teaser.jpg
+Our method enables joint optimization of camera poses and decomposed voxel representation by applying efficient separable component-wise convolution of Gaussian filters on 3D tensor volume and 2D supervision images.
+
+
+** Environment Setup
+**** Create Conda Environment
+
+1. Install [[https://docs.conda.io/projects/conda/en/latest/user-guide/install/index.html][conda environment]]
+2. Create conda env:
+#+BEGIN_SRC bash
+  # activate conda env
+  conda activate
+  # project root
+  cd Bundle_Adjusting_TensoRF
+  # create conda env ( Bundle_Adjusting_TensoRF )
+  bash ./env_setup/install.sh
+#+END_SRC
+
+**** Download Datasets
+
+Run the following scripts: 
+
+#+begin_src bash
+# activate conda env
+conda activate Bundle_Adjusting_TensoRF
+# dowload and unzip NeRF Datasets
+./env_setup/dataset.sh
+#+end_src
+
+*If the =dataset.sh= doesn't work* : try to manually download the files from google drive
+ * Download and unzip ~nerf_synthetic.zip~ and ~nerf_llff_data.zip~ from [[https://drive.google.com/drive/folders/128yBriW1IG_3NJ5Rp7APSTZsJqdJdfc1][NeRF Google Drive]]
+ * Rename the directories to ~blender~ and ~llff~ respectively
+ * Move the directories to ~Bundle_Adjusting_TensoRF/data/blender~ and ~Bundle_Adjusting_TensoRF/data/llff~
+
+
+** Reproduce Experiments
+
++ The project structure and training interface (options & yaml files) are inherited from [[https://github.com/chenhsuanlin/bundle-adjusting-NeRF][BARF]]
+  + For common settings, user can specify options in yaml files in ~options/~
+  + When directly running ~train_3d.py~, user can override options in cmd with ~--<key1>.<key2>=<value12> --<key3>=<value3>~
+  + When running multiple experiments with our newly added ~scripts/gpu_scheduler.py~, user can override default options with ~{"key1.key2": value}~ python dictionary item
++ It is strongly recommend to perform training and evaluation with ~RunConfigsGPUScheduler.default_use_wandb=True~ (default behaviour) because we log a lot of useful informations in [[https://wandb.ai/site][Weights & Bias Platform]], including:
+  + All Quantitative Results
+  + Visualizing Training Process and Animations
+  + Depth Map and Depth Animations
+  + Camera Poses and Camera Poses Animations
+  + Final Results and Animation
+
+**** Blender Dataset
+
++ Option1: Training + Evaluation in 1 Step
+  + It is recommended to lower the testing split ~data.test_sub~ in yaml file or python config, otherwise the evaluation time will be longer than training time.
+#+begin_src bash
+  python -m scripts.train_and_evaluate_bat_blender
+#+end_src
+
++ Opiton2: Separate Training & Evaluation (for timing purpose)
+#+begin_src bash
+  # tranining , save checkpoint in `output` directory 
+  python -m scripts.train_bat_blender
+
+  # don't change config in between the separated training and evaluation
+
+  # evaluation, auto load checkpoint and evaluate based on that , upload evaluation results to wandb as a separate run
+  python -m scripts.evaluate_bat_blender
+#+end_src
+
+
+**** LLFF Dataset
+
++ Option1: Training + Evaluation in 1 Step (recommended)
+#+begin_src bash
+  python -m scripts.train_and_evaluate_bat_llff
+#+end_src
+
++ Opiton2: Separate Training & Evaluation (for timing purpose)
+#+begin_src bash
+  # tranining , save checkpoint in `output` directory 
+  python -m scripts.train_bat_llff
+
+  # don't change config in between the separated training and evaluation
+
+  # evaluation, auto load checkpoint and evaluate based on that , upload evaluation results to wandb as a separate run
+  python -m scripts.evaluate_bat_llff
+#+end_src
+
+
+

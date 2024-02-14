@@ -1,0 +1,56 @@
+_parent_: options/nerf_blender.yaml
+
+barf_c2f: [0.1, 0.5]                                                  # coarse-to-fine scheduling on positional encoding
+
+#visualize pose gradient
+visualize_gradient: false
+#num_rays used when visualizing pose gradient
+vis_grad_n_rays: 64
+
+nerf:
+  ray_sampling_strategy: "all_view_rand_rays"
+
+max_iter: 200000
+camera:                                                     # camera options
+    noise: 0.15                                             # synthetic perturbations on the camera poses (Blender only)
+    visualize_depth: 0.5
+
+optim:                                                      # optimization options
+    lr_pose: 3.e-3                                          # learning rate of camera poses
+    lr_pose_end: 1.e-5                                      # terminal learning rate of camera poses (only used with sched_pose.type=ExponentialLR)
+    sched_pose:                                             # learning rate scheduling options
+        type: ExponentialLR                                 # scheduler (see PyTorch doc)
+        gamma:                                              # decay rate (can be empty if lr_pose_end were specified)
+    warmup_pose:                                            # linear warmup of the pose learning rate (N iterations)
+    test_photo: true                                        # test-time photometric optimization for evaluation
+    test_iter: 100                                          # number of iterations for test-time optimization
+
+freq:
+    vis_pose: 500                                          # visualize pose
+    vis_train: 500
+    vis: 500
+
+
+
+# # barf fast testing mode
+# max_iter: 30000
+# barf_c2f: [0.4, 0.7]                                                  # coarse-to-fine scheduling on positional encoding
+
+# camera:                                                     # camera option
+#     noise: 0.15                                             # synthetic perturbations on the camera poses (Blender only)
+#     visualize_depth: 0.5
+
+# optim:                                                      # optimization options
+#     lr_pose: 1.e-3                                          # learning rate of camera poses
+#     lr_pose_end: 1.e-4                                      # terminal learning rate of camera poses (only used with sched_pose.type=ExponentialLR)
+#     sched_pose:                                             # learning rate scheduling options
+#         type: ExponentialLR                                 # scheduler (see PyTorch doc)
+#         gamma:                                              # decay rate (can be empty if lr_pose_end were specified)
+#     warmup_pose:                                            # linear warmup of the pose learning rate (N iterations)
+#     test_photo: true                                        # test-time photometric optimization for evaluation
+#     test_iter: 100                                          # number of iterations for test-time optimization
+
+# freq:
+#     vis_pose: 500                                          # visualize pose
+#     vis_train: 500
+#     vis: 500

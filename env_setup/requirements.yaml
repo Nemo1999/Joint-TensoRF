@@ -1,0 +1,23 @@
+name: Bundle_Adjusting_TensoRF
+channels:
+  - conda-forge
+dependencies:
+  - ffmpeg
+  - python=3.10
+  - numpy
+  - scipy
+  - tqdm
+  - termcolor
+  - easydict
+  - imageio
+  - ipdb
+  - tensorboard
+  - visdom
+  - matplotlib
+  - scikit-video
+  - trimesh
+  - pyyaml
+  - pip
+  - gdown
+  - pillow
+

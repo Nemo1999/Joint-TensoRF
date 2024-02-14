@@ -1,0 +1,16 @@
+_parent_: options/tensorf_llff_VM.yaml
+
+arch:
+  shading:
+    model: MLP_Fea
+    view_pe: 2
+    fea_pe: 2
+    pose_pe: 2 # this is unused, the input to the MLP is noly view_direction and feature
+    mlp_hidden_dim: 128
+
+loss_weight:
+  L1:
+    init: 1.e-5
+    rest: 1.e-5
+  TV_density: 1.0
+  TV_color: 1.0
