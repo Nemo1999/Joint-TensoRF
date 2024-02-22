@@ -1,8 +1,12 @@
 ** Introduction
 Official Code Release for *AAAI 2024* Paper : Improving Robustness for Joint Optimization of Camera Poses and Decomposed Low-Rank Tensorial Radiance Fields
+
 - [[https://alex04072000.github.io/Joint-TensoRF/][Project Page Link]]
-- Arxiv Link (TBD)
-- Paper Link (TBD)
+- [[https://alex04072000.github.io/Joint-TensoRF/img/AAAI_Poster_Official.pdf][Poster (PDF)]]
+- [[https://arxiv.org/abs/2402.13252][Paper (Arxiv)]]
+- [[https://alex04072000.github.io/Joint-TensoRF/suppl.pdf][Supplementary (PDF)]]
+
+The release code is experimental and is not very stable, please raise issue to help improve the project.
 
 **** Robustify Joint Pose Optimization with Randomized 2D/3D Filtering and Edge-Guided Loss Mask
 
@@ -12,7 +16,9 @@ Official Code Release for *AAAI 2024* Paper : Improving Robustness for Joint Opt
 
 **** Efficient Separable Component-Wise Convolution
 #+DOWNLOADED: https://alex04072000.github.io/Joint-TensoRF/img/Teaser_Version2.jpg @ 2024-02-13 19:27:24
+
 file:teaser.jpg
+
 Our method enables joint optimization of camera poses and decomposed voxel representation by applying efficient separable component-wise convolution of Gaussian filters on 3D tensor volume and 2D supervision images.
 
 
