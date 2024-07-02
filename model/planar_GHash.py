@@ -20,14 +20,21 @@ import functools
 import camera
 import importlib
 import wandb
+import taichi as ti
+from .hash_encoder import HashEncoder_2D
 # ============================ main engine for training and evaluation ============================
+def taichi_init(args):
+    taichi_init_args = {"arch": ti.cuda,}
 
+    ti.init(**taichi_init_args)
+    
+    
 class Model(base.Model):
 
     def __init__(self,opt):
         super().__init__(opt)
         opt.H_crop,opt.W_crop = opt.data.patch_crop
-
+        taichi_init(opt)
     def load_dataset(self,opt,eval_split=None):
         image_raw = PIL.Image.open(opt.data.image_fname)
         self.image_raw = torchvision_F.to_tensor(image_raw).to(opt.device)
@@ -86,13 +93,6 @@ class Model(base.Model):
             loss = self.train_iteration(opt,var,loader)
             if opt.warp.fix_first:
                 self.graph.warp_param.weight.data[0] = 0
-                
-            # relocalization 
-            # if hasattr(opt,"reloc") and opt.reloc == True:
-            #     ic("reloclization")
-                
-                
-            #     exit()
         # after training
         os.system("ffmpeg -y -framerate 30 -i {}/%d.png -pix_fmt yuv420p {}".format(self.vis_path,self.video_fname))
         wandb.log({"video": wandb.Video(self.video_fname)})
@@ -234,11 +234,14 @@ class Graph(base.Graph):
         self.device = torch.device("cpu" if opt.cpu else f"cuda:{opt.gpu}")
 
     def forward(self,opt,var,mode=None):
+        ic("graph forward")
         xy_grid = warp.get_normalized_pixel_grid_crop(opt)
         xy_grid_warped = warp.warp_grid(opt,xy_grid,self.warp_param.weight)
         # render images
         var.rgb_warped = self.neural_image.forward(opt,xy_grid_warped) # [B,HW,3]
         var.rgb_warped_map = var.rgb_warped.view(opt.batch_size,opt.H_crop,opt.W_crop,3).permute(0,3,1,2) # [B,3,H,W]
+        ic("end graph forward")
+        
         return var
 
     def compute_loss(self,opt,var,mode=None):
@@ -247,6 +250,7 @@ class Graph(base.Graph):
             image_pert = var.image_pert.view(opt.batch_size,3,opt.H_crop*opt.W_crop).permute(0,2,1)
 
             loss.render = self.MSE_loss(var.rgb_warped,image_pert)
+        ic("end compute loss")
         return loss
 
 
@@ -292,9 +296,10 @@ class NeuralImageFunction(torch.nn.Module):
         super().__init__()
         self.define_network(opt)
         self.progress = torch.nn.Parameter(torch.tensor(0.)) # use Parameter so it could be checkpointed
+        self.hash_encoder=HashEncoder_2D()
 
     def define_network(self,opt):
-        input_2D_dim = 2+4*opt.arch.posenc.L_2D if opt.arch.posenc else 2
+        input_2D_dim = 16 #2+4*opt.arch.posenc.L_2D if opt.arch.posenc else 2
         # point-wise RGB prediction
         self.mlp = torch.nn.ModuleList()
         L = util.get_layer_dims(opt.arch.layers)
@@ -310,18 +315,29 @@ class NeuralImageFunction(torch.nn.Module):
             self.mlp.append(linear)
 
     def forward(self,opt,coord_2D): # [B,...,3]
-        if opt.arch.posenc:
-            points_enc = self.positional_encoding(opt,coord_2D,L=opt.arch.posenc.L_2D)
-            points_enc = torch.cat([coord_2D,points_enc],dim=-1) # [B,...,6L+3]
-        else: points_enc = coord_2D
-        feat = points_enc
+        # if opt.arch.posenc:
+        #     points_enc = self.positional_encoding(opt,coord_2D,L=opt.arch.posenc.L_2D)
+        #     points_enc = torch.cat([coord_2D,points_enc],dim=-1) # [B,...,6L+3]
+        # else: points_enc = coord_2D
+        # feat = points_enc
+        
+        # normalize coord_2D to [0,1]
+        coord_2D = (coord_2D+1 )/2
+        coord_2D.requires_grad_(True)
+        pad=torch.zeros(coord_2D.shape[0],coord_2D.shape[1],1).to(opt.device)
+        intput_pos=torch.cat([coord_2D,pad],dim=-1)
+        
+        
+        
+        feat=self.hash_encoder(intput_pos.view(-1,3)).view(coord_2D.shape[0],coord_2D.shape[1],-1)
         # extract implicit features
         for li,layer in enumerate(self.mlp):
-            if li in opt.arch.skip: feat = torch.cat([feat,points_enc],dim=-1)
+            # if li in opt.arch.skip: feat = torch.cat([feat,points_enc],dim=-1)
             feat = layer(feat)
             if li!=len(self.mlp)-1:
                 feat = torch_F.relu(feat)
         rgb = feat.sigmoid_() # [B,...,3]
+        ic(rgb.shape)
         return rgb
 
     def positional_encoding(self,opt,input,L): # [B,...,N]

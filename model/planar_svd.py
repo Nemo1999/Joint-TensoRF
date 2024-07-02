@@ -37,57 +37,72 @@ class Model(planar.Model):
         # log rank
         rank = self.graph.neural_image.get_scheduled_rank()
         self.tb.add_scalar(f"{split}/{'rank'}", rank , step)
+        
+        
+        # log rank of neural image
+        if self.graph.neural_image.svd_reconstruct is not None:
+            svd_reconstruct=self.graph.neural_image.svd_reconstruct
+            svd_reconstruct=torch.linalg.matrix_rank(svd_reconstruct).detach().cpu().numpy()
+            wandb.log({f"{split}.{'average_trank'}": svd_reconstruct.mean()}, step=step)
+            
+            sparsity=torch.mean((torch.abs(self.graph.neural_image.svd_reconstruct)<1e-5).to(torch.float)).detach().cpu().numpy()
+            
+            
+            wandb.log({f"{split}.{'sparsity(zero-rate)'}": sparsity}, step=step)
+            wandb.log({f"{split}.{'average_quant)'}": torch.mean(torch.abs(self.graph.neural_image.svd_reconstruct))}, step=step)
+            
+            
         wandb.log({f"{split}.{'rank'}": rank}, step=step)
 
         # log the gradient of sigma w.r.t the reconstruction Loss
-        if content_kernel_type in ["gaussian"] and opt.log_multi_scale:
-            sigma_scales = [2.0**i for i in range(-3, 8)]
-            weights = torch.arange(1,11+1).float().to(opt.device)
-            weights = weights / weights.sum()
-            for sigma_scale, weight, exponent in zip(sigma_scales, weights, range(-3, 8)):
-                sigma = torch.tensor(1.0).to(torch.float).to(opt.device).requires_grad_()
-                xy_grid = warp.get_normalized_pixel_grid_crop(opt)
-                xy_grid_warped = warp.warp_grid(opt,xy_grid,self.graph.warp_param.weight)
-                # render images
-                kernel = self.graph.neural_image.get_kernel(kernel_type="gaussian_diff", kernel_size=sigma_scale*6, external_diff_sigma=sigma*sigma_scale)
-                rgb_warped = self.graph.neural_image.forward(opt,xy_grid_warped, external_kernel=kernel) # [B,HW,3]
-                image_pert = var.image_pert.view(opt.batch_size, 3, opt.H_crop*opt.W_crop).permute(0, 2, 1)
-                l2_loss = ((rgb_warped - image_pert)**2).mean(axis=2, keepdim=False).mean(axis=1, keepdim=False)
+        # if content_kernel_type in ["gaussian"] and opt.log_multi_scale:
+        #     sigma_scales = [2.0**i for i in range(-3, 8)]
+        #     weights = torch.arange(1,11+1).float().to(opt.device)
+        #     weights = weights / weights.sum()
+        #     for sigma_scale, weight, exponent in zip(sigma_scales, weights, range(-3, 8)):
+        #         sigma = torch.tensor(1.0).to(torch.float).to(opt.device).requires_grad_()
+        #         xy_grid = warp.get_normalized_pixel_grid_crop(opt)
+        #         xy_grid_warped = warp.warp_grid(opt,xy_grid,self.graph.warp_param.weight)
+        #         # render images
+        #         kernel = self.graph.neural_image.get_kernel(kernel_type="gaussian_diff", kernel_size=sigma_scale*6, external_diff_sigma=sigma*sigma_scale)
+        #         rgb_warped = self.graph.neural_image.forward(opt,xy_grid_warped, external_kernel=kernel) # [B,HW,3]
+        #         image_pert = var.image_pert.view(opt.batch_size, 3, opt.H_crop*opt.W_crop).permute(0, 2, 1)
+        #         l2_loss = ((rgb_warped - image_pert)**2).mean(axis=2, keepdim=False).mean(axis=1, keepdim=False)
 
-                # log all-patch grad w.r.t sigma
-                total_grad_sigma = torch.autograd.grad(l2_loss.mean(), sigma, retain_graph=True)[0]
-                #total_grad_sigma *= weight
-                self.tb.add_scalar(f"P_all_sigma'_2^{exponent}", total_grad_sigma, step)
-                wandb.log({f"P_all_grad_sigma'_2^{exponent}": total_grad_sigma}, step=step)
+        #         # log all-patch grad w.r.t sigma
+        #         total_grad_sigma = torch.autograd.grad(l2_loss.mean(), sigma, retain_graph=True)[0]
+        #         #total_grad_sigma *= weight
+        #         self.tb.add_scalar(f"P_all_sigma'_2^{exponent}", total_grad_sigma, step)
+        #         wandb.log({f"P_all_grad_sigma'_2^{exponent}": total_grad_sigma}, step=step)
 
-                # log all-patch grad w.r.t warp parameters
-                total_grad_warp = torch.autograd.grad(l2_loss.mean(), self.graph.warp_param.weight, retain_graph=opt.log_per_patch_loss)[0]
-                #total_grad_warp *= weight
-                total_grad_warp_norm = torch.norm(total_grad_warp, dim=1)
-                total_warp_delta = (self.graph.warp_param.weight - self.warp_pert)  # current warp - GT warp
-                total_grad_warp_cosine = torch.nn.functional.cosine_similarity(total_grad_warp, total_warp_delta , dim=1)
+        #         # log all-patch grad w.r.t warp parameters
+        #         total_grad_warp = torch.autograd.grad(l2_loss.mean(), self.graph.warp_param.weight, retain_graph=opt.log_per_patch_loss)[0]
+        #         #total_grad_warp *= weight
+        #         total_grad_warp_norm = torch.norm(total_grad_warp, dim=1)
+        #         total_warp_delta = (self.graph.warp_param.weight - self.warp_pert)  # current warp - GT warp
+        #         total_grad_warp_cosine = torch.nn.functional.cosine_similarity(total_grad_warp, total_warp_delta , dim=1)
 
-                self.tb.add_scalar(f"P_all_warp'_norm_2^{exponent}", total_grad_warp_norm.mean(), step)
-                wandb.log({f"P_all_warp'_norm_2^{exponent}": total_grad_warp_norm.mean()}, step=step)
+        #         self.tb.add_scalar(f"P_all_warp'_norm_2^{exponent}", total_grad_warp_norm.mean(), step)
+        #         wandb.log({f"P_all_warp'_norm_2^{exponent}": total_grad_warp_norm.mean()}, step=step)
 
-                self.tb.add_scalar(f"P_all_warp'_cosine_2^{exponent}", total_grad_warp_cosine.mean(), step)
-                wandb.log({f"P_all_warp'_cosine_2^{exponent}": total_grad_warp_cosine.mean()}, step=step)
+        #         self.tb.add_scalar(f"P_all_warp'_cosine_2^{exponent}", total_grad_warp_cosine.mean(), step)
+        #         wandb.log({f"P_all_warp'_cosine_2^{exponent}": total_grad_warp_cosine.mean()}, step=step)
 
-                if opt.log_per_patch_loss:
-                    # log per-patch loss
-                    for b in range(opt.batch_size):
-                        # log per-patch grad w.r.t sigma
-                        retain_graph = b != opt.batch_size - 1
-                        patch_grad = torch.autograd.grad(l2_loss[b], sigma, retain_graph=retain_graph)[0]
-                        #patch_grad *= weight
-                        self.tb.add_scalar(f"P_{b}_sigma'_2^{exponent}", patch_grad, step)
-                        wandb.log({f"P_{b}_sigma'_2^{exponent}": patch_grad}, step=step)
+        #         if opt.log_per_patch_loss:
+        #             # log per-patch loss
+        #             for b in range(opt.batch_size):
+        #                 # log per-patch grad w.r.t sigma
+        #                 retain_graph = b != opt.batch_size - 1
+        #                 patch_grad = torch.autograd.grad(l2_loss[b], sigma, retain_graph=retain_graph)[0]
+        #                 #patch_grad *= weight
+        #                 self.tb.add_scalar(f"P_{b}_sigma'_2^{exponent}", patch_grad, step)
+        #                 wandb.log({f"P_{b}_sigma'_2^{exponent}": patch_grad}, step=step)
 
-                        # log per-patch grad w.r.t warp parameters
-                        self.tb.add_scalar(f"P_{b}_warp'_norm_2^{exponent}", total_grad_warp_norm[b], step)
-                        wandb.log({f"P_{b}_warp'_norm_2^{exponent}": total_grad_warp_norm[b]}, step=step)
-                        self.tb.add_scalar(f"P_{b}_warp'_cosine_2^{exponent}", total_grad_warp_cosine[b], step)
-                        wandb.log({f"P_{b}_warp'_cosine_2^{exponent}": total_grad_warp_cosine[b]}, step=step)
+        #                 # log per-patch grad w.r.t warp parameters
+        #                 self.tb.add_scalar(f"P_{b}_warp'_norm_2^{exponent}", total_grad_warp_norm[b], step)
+        #                 wandb.log({f"P_{b}_warp'_norm_2^{exponent}": total_grad_warp_norm[b]}, step=step)
+        #                 self.tb.add_scalar(f"P_{b}_warp'_cosine_2^{exponent}", total_grad_warp_cosine[b], step)
+        #                 wandb.log({f"P_{b}_warp'_cosine_2^{exponent}": total_grad_warp_cosine[b]}, step=step)
 
     def visualize(self,opt,var,step=0,split="train"):
         super().visualize(opt,var,step,split)
@@ -157,6 +172,10 @@ class Graph(planar.Graph):
                 loss.render = self.MSE_loss(var.rgb_warped, image_pert)
         if opt.loss_weight.total_variance is not None:
             loss.total_variance = self.TV_loss(self.neural_image)
+        
+        if opt.loss_weight.l1 is not None:
+            loss.l1 = self.L1_loss(self.neural_image.rank1) + self.L1_loss(self.neural_image.rank2)
+         
         return loss
 
     def forward(self,opt,var,mode=None):
@@ -242,6 +261,7 @@ class NeuralImageFunction(torch.nn.Module):
         # use Parameter so it could be checkpointed
         self.progress = torch.nn.Parameter(torch.tensor(0.))
         self.opt = opt
+        self.svd_reconstruct=None
 
     def initialize_param(self,opt):
         # arch options
@@ -295,7 +315,11 @@ class NeuralImageFunction(torch.nn.Module):
         rank2 = (torch.normal(rank2, 0.1))
         self.register_parameter(name='rank1', param=torch.nn.Parameter(rank1))
         self.register_parameter(name='rank2', param=torch.nn.Parameter(rank2))
-
+        
+        
+        
+        self.smooth_field1= torch.nn.Linear(2+4*4, 64, bias=False)
+        self.smooth_field2= torch.nn.Linear(64, 3, bias=False)
     def get_scheduled_rank(self):
         return int(interp_schedule(self.progress, self.c2f_rank))
 
@@ -337,13 +361,42 @@ class NeuralImageFunction(torch.nn.Module):
 
             rbg = torch.sum(r1_blur.unsqueeze(
                 2) * r2_blur.unsqueeze(3), dim=1, keepdim=False)
+            
+            self.svd_reconstruct=rbg
             assert rbg.shape == (
                 3, self.resolution[1], self.resolution[0]), f"rbg image has shape {rbg.shape}"
 
+            
+            
+            # start,end = 0.1,0.2
+            # alpha= ((self.progress.data-start)/(end-start)).clip(0,1)
+            # pos_en=self.positional_encoding(coord_2D, freqs=4, progress=alpha)
+            # pos_en=torch.cat([coord_2D,pos_en],dim=-1)
+            # feat=self.smooth_field1(pos_en)
+            # feat=torch.nn.functional.relu(feat)
+            # feat=self.smooth_field2(feat)
 
             sampled_rbg = torch_F.grid_sample(rbg.expand(B, -1, -1, -1), coord_2D.unsqueeze(1), align_corners=False, mode=opt.arch.grid_interp).squeeze(2) #B, 3, H*W
+            
+            
+            # sampled_rbg=sampled_rbg+feat.permute(0,2,1).sigmoid()
+            
+            
+            # sampled_rbg=sampled_rbg
+            # ic(sampled_rbg.shape)
+            # exit()
 
         if return_kernel:
             return sampled_rbg.permute(0, 2, 1), kernel
 
         return sampled_rbg.permute(0, 2, 1)
+    def positional_encoding(self,positions, freqs, progress=1.0):
+        levels = torch.arange(freqs, device=positions.device)
+        freq_bands = (2**levels)  # (F,)
+        mask = (progress * freqs - levels).clamp_(min=0.0, max=1) # linear anealing
+        pts = positions[..., None] * freq_bands
+        pts_sin = torch.sin(pts)*mask
+        pts_cos = torch.cos(pts)*mask
+        pts = torch.cat([pts_sin , pts_cos], dim=-1)
+        pts = pts.reshape(positions.shape[:-1] + (freqs * 2 * positions.shape[-1], ))  # (..., DF)
+        return pts

@@ -88,6 +88,7 @@ class Model(torch.nn.Module):
         if self.iter_start==0: self.validate(opt,ep=0)
         for self.ep in range(self.epoch_start,opt.max_epoch):
             self.train_epoch(opt)
+            
         # after training
         if opt.tb:
             self.tb.flush()
@@ -116,6 +117,10 @@ class Model(torch.nn.Module):
         # before train iteration
         self.timer.it_start = time.time()
         self.optim.zero_grad()
+        
+        if hasattr(opt,"ema") and opt.ema == True:
+            old_warp_param = self.graph.warp_param.weight.detach().clone()
+        
         if hasattr(opt,"profiling") and opt.profiling == True:
             # debugg autograd
             # torch.autograd.set_detect_anomaly(True)
@@ -160,6 +165,11 @@ class Model(torch.nn.Module):
             loss = self.graph.compute_loss(opt,var,mode="train")
             loss = self.summarize_loss(opt,var,loss)
             loss.all.backward()
+            
+            
+            if hasattr(opt,"ema") and opt.ema == True:
+                self.graph.warp_param.weight.data = 0.9*old_warp_param+0.1*self.graph.warp_param.weight
+                
             if (not hasattr(opt.optim,"grad_accum_iter") ) or (self.it % opt.optim.grad_accum_iter) == 0:
                 self.optim.step()
                 self.optim.zero_grad()
