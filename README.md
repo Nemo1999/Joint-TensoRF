@@ -121,7 +121,7 @@ python -m scripts.evaluate_bat_llff
 
 # Acknowdgement <a id="sec-4"></a>
 
-The code of this project is modified from [https://github.com/apchenstu/TensoRF](https://github.com/chenhsuanlin/bundle-adjusting-NeRF)
+The code of this project is modified from https://github.com/chenhsuanlin/bundle-adjusting-NeRF
 
 Huge thanks to *Lin, Chen-Hsuan* , *Ma, Wei-Chiu* , *Torralba, Antonio* and *Lucey, Simon* for open-sourcing great codebase!
 
