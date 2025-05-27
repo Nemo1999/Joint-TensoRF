@@ -7,6 +7,9 @@
   - [Reproduce Experiments](#sec-3)
       - [Blender Dataset](#sec-3-0-1)
       - [LLFF Dataset](#sec-3-0-2)
+  - [Acknowledgement](#sec-4)
+ 
+  
 
 # Introduction<a id="sec-1"></a>
 
@@ -115,3 +118,8 @@ python -m scripts.train_bat_llff
 # evaluation, auto load checkpoint and evaluate based on that , upload evaluation results to wandb as a separate run
 python -m scripts.evaluate_bat_llff
 ```
+
+# Acknowdgement <a id="sec-4"></a>
+
+The code of this project is modified from https://github.com/apchenstu/TensoRF
+Thanks *Anpei Chen*, *Zexiang Xu*, *Andreas Geiger*, *Jingyi Yu*, *Hao Su* for providing this greate codebase!
